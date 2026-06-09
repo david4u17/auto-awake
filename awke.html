@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Awake</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f13;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      gap: 32px;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #f1f5f9;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #64748b;
+      text-align: center;
+      max-width: 360px;
+      line-height: 1.6;
+      margin-top: -20px;
+    }
+
+    /* Pulse ring */
+    .pulse-ring {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pulse-ring::before, .pulse-ring::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid #22c55e;
+      opacity: 0;
+      animation: none;
+    }
+
+    .pulse-ring.active::before {
+      width: 100%; height: 100%;
+      animation: ring 2s ease-out infinite;
+    }
+
+    .pulse-ring.active::after {
+      width: 100%; height: 100%;
+      animation: ring 2s ease-out 1s infinite;
+    }
+
+    @keyframes ring {
+      0%   { transform: scale(0.8); opacity: 0.8; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .status-circle {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #1e1e2a;
+      border: 3px solid #2d2d3a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      transition: border-color 0.4s, background 0.4s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .pulse-ring.active .status-circle {
+      border-color: #22c55e;
+      background: #0d2218;
+    }
+
+    /* Main toggle button */
+    .btn-toggle {
+      padding: 14px 48px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.25s;
+      letter-spacing: 0.3px;
+      background: #22c55e;
+      color: #052e16;
+    }
+
+    .btn-toggle:hover { background: #16a34a; transform: translateY(-1px); }
+    .btn-toggle:active { transform: translateY(0); }
+    .btn-toggle.running { background: #ef4444; color: #fff; }
+    .btn-toggle.running:hover { background: #dc2626; }
+
+    /* Stats bar */
+    .stats {
+      display: flex;
+      gap: 32px;
+      background: #1a1a24;
+      border: 1px solid #2d2d3a;
+      border-radius: 16px;
+      padding: 20px 32px;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* Interval control */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+
+    .controls input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 160px;
+      height: 4px;
+      border-radius: 4px;
+      background: #2d2d3a;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .controls input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #22c55e;
+      cursor: pointer;
+    }
+
+    #interval-display {
+      min-width: 40px;
+      text-align: right;
+      color: #22c55e;
+      font-weight: 600;
+    }
+
+    /* Wake lock badge */
+    .badge {
+      font-size: 0.75rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid #2d2d3a;
+      color: #475569;
+    }
+
+    .badge.wake-on { border-color: #22c55e55; color: #22c55e; background: #0d221833; }
+
+    /* Hidden click target */
+    #click-target { position: fixed; top: -9999px; left: -9999px; }
+  </style>
+</head>
+<body>
+
+  <h1>Auto Awake</h1>
+  <p class="subtitle">Keeps your screen on and simulates activity so your laptop never sleeps.</p>
+
+  <div class="pulse-ring" id="pulseRing">
+    <div class="status-circle" id="statusCircle">💤</div>
+  </div>
+
+  <button class="btn-toggle" id="toggleBtn" onclick="toggle()">Start</button>
+
+  <div class="stats">
+    <div class="stat">
+      <span class="stat-value" id="clickCount">0</span>
+      <span class="stat-label">Clicks</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" id="elapsed">00:00</span>
+      <span class="stat-label">Elapsed</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span>Interval</span>
+    <input type="range" id="intervalSlider" min="1" max="30" value="5" oninput="updateInterval(this.value)" />
+    <span id="interval-display">5s</span>
+  </div>
+
+  <span class="badge" id="wakeBadge">Wake Lock: unavailable</span>
+
+  <div id="click-target" tabindex="-1" aria-hidden="true"></div>
+
+  <script>
+    let running = false;
+    let clickTimer = null;
+    let elapsedTimer = null;
+    let wakeLock = null;
+    let clicks = 0;
+    let startTime = null;
+    let intervalSec = 5;
+
+    const toggleBtn   = document.getElementById('toggleBtn');
+    const pulseRing   = document.getElementById('pulseRing');
+    const statusCircle = document.getElementById('statusCircle');
+    const clickCount  = document.getElementById('clickCount');
+    const elapsed     = document.getElementById('elapsed');
+    const wakeBadge   = document.getElementById('wakeBadge');
+    const target      = document.getElementById('click-target');
+
+    // Re-acquire wake lock if page becomes visible again
+    document.addEventListener('visibilitychange', async () => {
+      if (running && document.visibilityState === 'visible') {
+        await acquireWakeLock();
+      }
+    });
+
+    async function acquireWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeBadge.textContent = 'Wake Lock: active';
+          wakeBadge.className = 'badge wake-on';
+          wakeLock.addEventListener('release', () => {
+            wakeBadge.textContent = 'Wake Lock: released';
+            wakeBadge.className = 'badge';
+          });
+        } catch (e) {
+          wakeBadge.textContent = 'Wake Lock: denied';
+        }
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+      wakeBadge.textContent = 'Wake Lock: off';
+      wakeBadge.className = 'badge';
+    }
+
+    function simulateClick() {
+      target.focus();
+      target.click();
+      clicks++;
+      clickCount.textContent = clicks;
+    }
+
+    function formatTime(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    }
+
+    async function toggle() {
+      if (!running) {
+        running = true;
+        clicks = 0;
+        startTime = Date.now();
+        clickCount.textContent = '0';
+
+        toggleBtn.textContent = 'Stop';
+        toggleBtn.className = 'btn-toggle running';
+        pulseRing.classList.add('active');
+        statusCircle.textContent = '⚡';
+
+        await acquireWakeLock();
+
+        simulateClick();
+        clickTimer = setInterval(simulateClick, intervalSec * 1000);
+
+        elapsedTimer = setInterval(() => {
+          elapsed.textContent = formatTime(Date.now() - startTime);
+        }, 1000);
+      } else {
+        stop();
+      }
+    }
+
+    async function stop() {
+      running = false;
+      clearInterval(clickTimer);
+      clearInterval(elapsedTimer);
+
+      toggleBtn.textContent = 'Start';
+      toggleBtn.className = 'btn-toggle';
+      pulseRing.classList.remove('active');
+      statusCircle.textContent = '💤';
+
+      await releaseWakeLock();
+    }
+
+    function updateInterval(val) {
+      intervalSec = parseInt(val);
+      document.getElementById('interval-display').textContent = val + 's';
+      if (running) {
+        clearInterval(clickTimer);
+        clickTimer = setInterval(simulateClick, intervalSec * 1000);
+      }
+    }
+
+    // Show wake lock support on load
+    if ('wakeLock' in navigator) {
+      wakeBadge.textContent = 'Wake Lock: supported';
+    }
+  </script>
+</body>
+</html>
